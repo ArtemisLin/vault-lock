@@ -2,7 +2,7 @@
 
 **VaultLock** 是一个为 [Obsidian](https://obsidian.md/) 设计的插件，通过密码保护锁定Obsidian的用户界面，确保你的笔记和数据安全无虞。
 
-![VaultLock界面](https://example.com/path/to/your/screenshot.png)  
+![VaultLock界面](https://github.com/ArtemisLin/vault-lock/blob/master/assets/vault-lock-screenshot.png)  
 
 ## 功能特性
 
