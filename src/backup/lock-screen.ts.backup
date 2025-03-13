@@ -1,0 +1,420 @@
+// src/lock-screen.ts
+import { App, Modal, Notice } from 'obsidian';
+import PasswordLockPlugin from '../main';
+import { PasswordUtils } from './password-utils';
+
+export class LockScreen {
+  private app: App;
+  private plugin: PasswordLockPlugin;
+  private lockEl: HTMLElement | null = null;
+  private inputValue: string = '';
+  private MAX_ATTEMPTS = 5;
+  private LOCKOUT_TIME = 5 * 60 * 1000; // 5分钟锁定时间(毫秒)
+
+  constructor(app: App, plugin: PasswordLockPlugin) {
+    this.app = app;
+    this.plugin = plugin;
+  }
+
+  // 显示锁屏
+  showLockScreen(): void {
+    // 如果已经显示，不重复显示
+    if (this.lockEl) return;
+
+    // 创建锁屏元素
+    this.lockEl = document.createElement('div');
+    this.lockEl.classList.add('password-lock-screen');
+    
+    // 创建锁屏内容
+    const content = document.createElement('div');
+    content.classList.add('password-lock-content');
+    
+    // 标题
+    const title = document.createElement('h2');
+    title.textContent = 'Enter Password';
+    content.appendChild(title);
+    
+    // 密码显示区域
+    const passwordDisplay = document.createElement('div');
+    passwordDisplay.classList.add('password-display');
+    content.appendChild(passwordDisplay);
+    
+    // 密码输入显示（显示为圆点）
+    const dotsContainer = document.createElement('div');
+    dotsContainer.classList.add('password-dots');
+    passwordDisplay.appendChild(dotsContainer);
+    
+    // 数字键盘
+    const keypad = document.createElement('div');
+    keypad.classList.add('password-keypad');
+    
+    // 添加数字按钮 (1-9, 0)
+    for (let i = 1; i <= 9; i++) {
+      this.addKeypadButton(keypad, dotsContainer, i.toString());
+    }
+    this.addKeypadButton(keypad, dotsContainer, '0');
+    
+    // 添加删除按钮
+    const deleteBtn = document.createElement('button');
+    deleteBtn.classList.add('password-key', 'delete-key');
+    deleteBtn.innerHTML = '&larr;';
+    deleteBtn.addEventListener('click', () => {
+      this.handleDelete();
+      this.updatePasswordDisplay(dotsContainer);
+    });
+    keypad.appendChild(deleteBtn);
+    
+    content.appendChild(keypad);
+    
+    // 添加忘记密码按钮
+    const forgotBtn = document.createElement('button');
+    forgotBtn.classList.add('forgot-password');
+    forgotBtn.textContent = 'Forgot Password?';
+    forgotBtn.addEventListener('click', () => {
+      this.showForgotPasswordDialog();
+    });
+    content.appendChild(forgotBtn);
+    
+    this.lockEl.appendChild(content);
+    
+    // 添加到文档
+    document.body.appendChild(this.lockEl);
+    
+    // 重置输入值
+    this.inputValue = '';
+    this.updatePasswordDisplay(dotsContainer);
+    
+    // 禁用背景交互
+    document.body.classList.add('password-locked');
+  }
+
+  // 隐藏锁屏
+  hideLockScreen(): void {
+    if (this.lockEl) {
+      document.body.removeChild(this.lockEl);
+      this.lockEl = null;
+      document.body.classList.remove('password-locked');
+      
+      // 重置尝试次数
+      this.plugin.settings.attempts = 0;
+      this.plugin.settings.lastUnlockTime = Date.now();
+      this.plugin.saveSettings();
+    }
+  }
+
+  // 验证密码
+  async verifyPassword(password: string): Promise<boolean> {
+    const { passwordHash, salt, attempts } = this.plugin.settings;
+    
+    // 检查是否暂时锁定
+    if (attempts >= this.MAX_ATTEMPTS) {
+      const lockoutEndTime = this.plugin.settings.lastUnlockTime + this.LOCKOUT_TIME;
+      if (Date.now() < lockoutEndTime) {
+        const remainingMinutes = Math.ceil((lockoutEndTime - Date.now()) / 60000);
+        new Notice(`Too many incorrect attempts. Please try again in ${remainingMinutes} minutes.`);
+        return false;
+      } else {
+        // 锁定时间已过，重置尝试次数
+        this.plugin.settings.attempts = 0;
+      }
+    }
+    
+    // 验证密码
+    const isCorrect = await PasswordUtils.verifyPassword(password, passwordHash, salt);
+    
+    if (isCorrect) {
+      // 密码正确，重置尝试次数
+      this.plugin.settings.attempts = 0;
+      this.plugin.settings.lastUnlockTime = Date.now();
+      await this.plugin.saveSettings();
+      return true;
+    } else {
+      // 密码错误，增加尝试次数
+      this.plugin.settings.attempts++;
+      await this.plugin.saveSettings();
+      
+      // 显示错误消息
+      if (this.plugin.settings.attempts >= this.MAX_ATTEMPTS) {
+        new Notice(`Too many incorrect attempts. Vault will be locked for 5 minutes.`);
+      } else {
+        const remainingAttempts = this.MAX_ATTEMPTS - this.plugin.settings.attempts;
+        new Notice(`Incorrect password. ${remainingAttempts} attempts remaining.`);
+      }
+      
+      return false;
+    }
+  }
+
+  // 添加数字键盘按钮
+  private addKeypadButton(keypad: HTMLElement, dotsContainer: HTMLElement, value: string): void {
+    const button = document.createElement('button');
+    button.classList.add('password-key');
+    button.textContent = value;
+    button.addEventListener('click', () => {
+      // 限制最大长度为6位
+      if (this.inputValue.length < 6) {
+        this.inputValue += value;
+        
+        // 更新显示
+        this.updatePasswordDisplay(dotsContainer);
+        
+        // 如果达到最小密码长度(4位)，尝试验证
+        if (this.inputValue.length >= 4) {
+          // 延迟验证以便用户可以看到输入
+          setTimeout(async () => {
+            if (await this.verifyPassword(this.inputValue)) {
+              await this.plugin.unlockVault(this.inputValue);
+            } else {
+              // 失败后清空输入
+              this.inputValue = '';
+              this.updatePasswordDisplay(dotsContainer);
+            }
+          }, 300);
+        }
+      }
+    });
+    keypad.appendChild(button);
+  }
+
+  // 处理删除按钮
+  private handleDelete(): void {
+    if (this.inputValue.length > 0) {
+      this.inputValue = this.inputValue.slice(0, -1);
+    }
+  }
+
+  // 更新密码显示
+  private updatePasswordDisplay(container: HTMLElement): void {
+    container.empty();
+    
+    // 添加圆点表示输入的密码位数
+    for (let i = 0; i < 6; i++) {
+      const dot = document.createElement('div');
+      dot.classList.add('password-dot');
+      if (i < this.inputValue.length) {
+        dot.classList.add('filled');
+      }
+      container.appendChild(dot);
+    }
+  }
+
+  // 显示密码设置模态框
+  showPasswordSetupModal(): void {
+    const modal = new PasswordSetupModal(this.app, this.plugin);
+    modal.open();
+  }
+
+  // 显示忘记密码对话框
+  private showForgotPasswordDialog(): void {
+    const modal = new ForgotPasswordModal(this.app, this.plugin);
+    modal.open();
+  }
+}
+
+// 密码设置模态框
+export class PasswordSetupModal extends Modal {
+  private plugin: PasswordLockPlugin;
+  private inputValue: string = '';
+  private confirmValue: string = '';
+  private isConfirmStage: boolean = false;
+
+  constructor(app: App, plugin: PasswordLockPlugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+
+  onOpen() {
+    const {contentEl} = this;
+    contentEl.empty();
+    
+    contentEl.createEl('h2', {text: this.isConfirmStage ? 'Confirm Password' : 'Set Password'});
+    
+    // 密码显示
+    const passwordDisplay = contentEl.createDiv({cls: 'password-display'});
+    const dotsContainer = passwordDisplay.createDiv({cls: 'password-dots'});
+    this.updatePasswordDisplay(dotsContainer);
+    
+    // 数字键盘
+    const keypad = contentEl.createDiv({cls: 'password-keypad'});
+    
+    // 添加数字按钮 (1-9, 0)
+    for (let i = 1; i <= 9; i++) {
+      this.addKeypadButton(keypad, dotsContainer, i.toString());
+    }
+    this.addKeypadButton(keypad, dotsContainer, '0');
+    
+    // 添加删除按钮
+    const deleteBtn = createEl('button', {cls: 'password-key delete-key'});
+    deleteBtn.innerHTML = '&larr;';
+    deleteBtn.addEventListener('click', () => {
+      this.handleDelete();
+      this.updatePasswordDisplay(dotsContainer);
+    });
+    keypad.appendChild(deleteBtn);
+    
+    // 添加说明文本
+    contentEl.createEl('p', {
+      text: '请设置一个4-6位数字密码',
+      cls: 'password-setup-desc'
+    });
+  }
+
+  onClose() {
+    const {contentEl} = this;
+    contentEl.empty();
+  }
+
+  // 添加数字键盘按钮
+  private addKeypadButton(container: HTMLElement, dotsContainer: HTMLElement, value: string): void {
+    const button = createEl('button', {cls: 'password-key'});
+    button.textContent = value;
+    button.addEventListener('click', () => {
+      // 限制最大长度为6位
+      if ((this.isConfirmStage ? this.confirmValue : this.inputValue).length < 6) {
+        if (this.isConfirmStage) {
+          this.confirmValue += value;
+        } else {
+          this.inputValue += value;
+        }
+        
+        // 更新显示
+        this.updatePasswordDisplay(dotsContainer);
+        
+        // 如果达到最小密码长度(4位)，检查是否可以进入下一步
+        const currentValue = this.isConfirmStage ? this.confirmValue : this.inputValue;
+        if (currentValue.length >= 4) {
+          // 第一阶段完成后，切换到确认阶段
+          if (!this.isConfirmStage) {
+            setTimeout(() => {
+              this.isConfirmStage = true;
+              this.confirmValue = '';
+              this.contentEl.empty();
+              this.onOpen(); // 重新加载UI
+            }, 300);
+          } else {
+            // 确认阶段完成，验证两次输入是否匹配
+            setTimeout(async () => {
+              if (this.inputValue === this.confirmValue) {
+                // 密码匹配，保存
+                await this.savePassword(this.inputValue);
+                this.close();
+                new Notice('Password set successfully');
+              } else {
+                // 不匹配，重新开始
+                new Notice('Passwords do not match. Please try again.');
+                this.isConfirmStage = false;
+                this.inputValue = '';
+                this.confirmValue = '';
+                this.contentEl.empty();
+                this.onOpen(); // 重新加载UI
+              }
+            }, 300);
+          }
+        }
+      }
+    });
+    container.appendChild(button);
+  }
+
+  // 处理删除按钮
+  private handleDelete(): void {
+    if (this.isConfirmStage) {
+      if (this.confirmValue.length > 0) {
+        this.confirmValue = this.confirmValue.slice(0, -1);
+      }
+    } else {
+      if (this.inputValue.length > 0) {
+        this.inputValue = this.inputValue.slice(0, -1);
+      }
+    }
+  }
+
+  // 更新密码显示
+  private updatePasswordDisplay(container: HTMLElement): void {
+    container.empty();
+    
+    const value = this.isConfirmStage ? this.confirmValue : this.inputValue;
+    
+    // 添加圆点表示输入的密码位数
+    for (let i = 0; i < 6; i++) {
+      const dot = createEl('div', {cls: 'password-dot'});
+      if (i < value.length) {
+        dot.classList.add('filled');
+      }
+      container.appendChild(dot);
+    }
+  }
+
+  // 保存密码
+  private async savePassword(password: string): Promise<void> {
+    const salt = PasswordUtils.generateSalt();
+    const hash = await PasswordUtils.hashPassword(password, salt);
+    
+    this.plugin.settings.passwordHash = hash;
+    this.plugin.settings.salt = salt;
+    await this.plugin.saveSettings();
+  }
+}
+
+// 忘记密码模态框
+export class ForgotPasswordModal extends Modal {
+  private plugin: PasswordLockPlugin;
+  
+  constructor(app: App, plugin: PasswordLockPlugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+  
+  onOpen() {
+    const {contentEl} = this;
+    contentEl.empty();
+    
+    contentEl.createEl('h2', {text: 'Reset Password'});
+    
+    contentEl.createEl('p', {
+      text: 'To reset your password, you need to restart Obsidian and go to the password settings.'
+    });
+    
+    // 添加说明
+    contentEl.createEl('p', {
+      text: 'Do you want to restart Obsidian now?',
+      cls: 'password-reset-desc'
+    });
+    
+    // 添加按钮
+    const buttonContainer = contentEl.createDiv({cls: 'password-reset-buttons'});
+    
+    // 取消按钮
+    const cancelBtn = buttonContainer.createEl('button', {
+      text: 'Cancel',
+      cls: 'password-reset-cancel'
+    });
+    cancelBtn.addEventListener('click', () => {
+      this.close();
+    });
+    
+    // 重启按钮
+    const restartBtn = buttonContainer.createEl('button', {
+      text: 'Restart Obsidian',
+      cls: 'password-reset-confirm'
+    });
+    restartBtn.addEventListener('click', () => {
+      // 使用Electron API重启应用
+      // 注意：这需要在主进程中实现，这里只是占位
+      // @ts-ignore
+      if (window.electronAPI) {
+        // @ts-ignore
+        window.electronAPI.restartApp();
+      } else {
+        // 回退方案：提示用户手动重启
+        new Notice('Please manually restart Obsidian to reset your password.');
+      }
+      this.close();
+    });
+  }
+  
+  onClose() {
+    const {contentEl} = this;
+    contentEl.empty();
+  }
+}

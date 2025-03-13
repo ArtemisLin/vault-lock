@@ -35,22 +35,19 @@ body.password-locked {
 /* === 模态框样式 === */
 /* 模态框容器 - 确保居中且最高层级 */
 .password-modal {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 999999 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  pointer-events: auto !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
 }
 
-/* 修改背景模糊样式 */
+/* 模态框背景 - 半透明遮罩 */
 .password-modal-background {
   position: absolute;
   top: 0;
@@ -58,17 +55,20 @@ body.password-locked {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
-/* 模态框内容样式 */
+/* 模态框内容 - 确保尺寸和位置一致 */
 .password-modal-content {
+  position: relative; /* 相对于模态框容器 */
   width: 300px;
+  min-height: 400px;
   padding: 20px;
   border-radius: 12px;
   background-color: var(--background-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1; /* 确保在背景之上 */
   text-align: center;
 }
 
@@ -327,34 +327,3 @@ body.password-locked {
 .modal, .modal-container, .modal-bg {
   z-index: auto !important;
 }
-
-.modal-bg {
-  display: none !important;
-}
-
-/* 确保忘记密码模态框始终在最上层 */
-.help-modal {
-  z-index: 1000000 !important;
-}
-
-/* 自定义模态框容器 */
-.password-custom-modal .modal {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  max-width: none !important;
-  max-height: none !important;
-  width: 100% !important;
-  height: 100% !important;
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  background-color: rgba(0, 0, 0, 0.3) !important;
-}
-

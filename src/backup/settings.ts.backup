@@ -1,0 +1,26 @@
+// src/settings.ts
+import { PasswordUtils } from './password-utils';
+
+export interface PasswordSettings {
+  passwordHash: string;  // 密码的哈希值
+  salt: string;         // 用于哈希的盐值
+  lockOnStartup: boolean; // 启动时锁定
+  lockOnInactivity: boolean; // 不活动时锁定
+  lockOnWindowBlur: boolean; // 窗口失焦时锁定
+  inactivityTimeout: number; // 不活动锁定的超时时间(分钟)
+  protectFolder: boolean; // 是否保护文件夹
+  attempts: number; // 密码尝试次数，用于限制暴力破解
+  lastUnlockTime: number; // 上次解锁时间，用于超时判断
+}
+
+export const DEFAULT_SETTINGS: PasswordSettings = {
+  passwordHash: '',
+  salt: '',
+  lockOnStartup: true,
+  lockOnInactivity: true,
+  lockOnWindowBlur: true,
+  inactivityTimeout: 5,
+  protectFolder: true,
+  attempts: 0,
+  lastUnlockTime: 0
+}

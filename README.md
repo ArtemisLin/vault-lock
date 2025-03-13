@@ -1,94 +1,73 @@
-# Obsidian Sample Plugin
+# VaultLock
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+**VaultLock** 是一个为 [Obsidian](https://obsidian.md/) 设计的插件，通过密码保护锁定Obsidian的用户界面，确保你的笔记和数据安全无虞。
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+![VaultLock界面](https://example.com/path/to/your/screenshot.png)  
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+## 功能特性
 
-## First time developing plugins?
+- **密码保护**：设置一个4位数字密码来锁定和解锁Obsidian界面。
+- **自动锁定**：
+  - 在Obsidian启动时自动锁定。
+  - 在一段时间不活动后自动锁定。
+  - 当Obsidian窗口失去焦点时自动锁定。
+- **手动锁定**：通过命令面板手动锁定你的Vault。
+- **密码重置帮助**：如果忘记密码，提供重置插件的指南。
+- **多语言支持**：支持英文和简体中文界面。
 
-Quick starting guide for new plugin devs:
+## 安装方法
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+1. **下载插件**：
+   - 从 [GitHub releases](https://github.com/artemislin/vaultlock/releases) 下载最新版本的 `vaultlock.zip`。
+2. **安装插件**：
+   - 打开Obsidian，进入“设置” > “社区插件”。
+   - 确保“社区插件”已启用。
+   - 点击“浏览”，搜索“VaultLock”，或手动上传下载的 `vaultlock.zip` 文件。
+3. **启用插件**：
+   - 安装完成后，返回“社区插件”页面，找到“VaultLock”并启用。
 
-## Releasing new releases
+## 使用指南
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+### 设置密码
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+1. 首次安装后，插件会提示你设置一个4位数字密码。
+2. 输入你的密码并确认。
+3. 密码设置成功后，你可以通过此密码锁定和解锁Obsidian界面。
 
-## Adding your plugin to the community plugin list
+### 锁定Vault
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+- **自动锁定**：
+  - **Obsidian启动时**：可在设置中启用。
+  - **不活动超时**：可在设置中指定不活动时间（例如5分钟）。
+  - **窗口失去焦点**：当切换到其他应用时锁定，可在设置中启用。
+- **手动锁定**：
+  - 打开命令面板（`Ctrl+P` 或 `Cmd+P`），输入“Lock Vault”并执行。
 
-## How to use
+### 解锁Vault
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+- 当Vault被锁定时，输入你的4位密码解锁。
+- 如果密码错误，系统会提示剩余尝试次数。
+- 尝试次数过多（默认5次）后，Vault将锁定一段时间（默认5分钟）。
 
-## Manually installing the plugin
+### 忘记密码
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+如果忘记密码，可以通过以下步骤重置插件：
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
+1. 完全关闭Obsidian。
+2. 导航到你的Vault文件夹。
+3. 打开 `.obsidian/plugins/vaultlock/` 文件夹。
+4. 删除 `data.json` 文件。
+5. 重新启动Obsidian。
 
-## Funding URL
+**注意**：此操作会重置所有密码设置，但不会影响你的笔记内容。
 
-You can include funding URLs where people who use your plugin can financially support it.
+## 配置选项
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+在Obsidian的“设置” > “VaultLock”中，你可以调整以下选项：
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
-
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+- **语言**：选择界面语言（英文或简体中文）。
+- **自动锁定设置**：
+  - **启动时锁定**：Obsidian启动时自动锁定Vault。
+  - **不活动锁定**：设置不活动时间（分钟），超时后自动锁定。
+  - **窗口失去焦点时锁定**：切换应用时自动锁定。
+- **手动锁定**：通过命令面板执行“Lock Vault”命令。

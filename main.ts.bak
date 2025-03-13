@@ -1,0 +1,191 @@
+// 项目目录结构
+/*
+obsidian-password-lock/
+├── main.ts                  // 插件主入口
+├── manifest.json            // 插件元数据
+├── styles.css               // 样式文件
+├── src/                     // 源代码目录
+│   ├── settings.ts          // 设置界面
+│   ├── lock-screen.ts       // 锁屏界面
+│   ├── folder-protection.ts // 文件夹保护
+│   ├── password-utils.ts    // 密码管理工具
+│   └── lock-trigger.ts      // 锁定触发器
+└── ...
+*/
+
+// manifest.json - 插件元数据
+{
+	"id": "obsidian-password-lock",
+	"name": "Password Lock",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Lock your Obsidian vault with a password. Protects both the Obsidian interface and the vault folder on Windows.",
+	"author": "Your Name",
+	"authorUrl": "https://github.com/yourusername",
+	"isDesktopOnly": true
+  }
+  
+  // main.ts - 插件主入口
+  import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+  import { LockScreen } from './src/lock-screen';
+  import { FolderProtection } from './src/folder-protection';
+  import { LockTrigger } from './src/lock-trigger';
+  import { PasswordSettings, DEFAULT_SETTINGS } from './src/settings';
+  
+  export default class PasswordLockPlugin extends Plugin {
+	settings: PasswordSettings;
+	lockScreen: LockScreen;
+	folderProtection: FolderProtection;
+	lockTrigger: LockTrigger;
+  
+	async onload() {
+	  await this.loadSettings();
+  
+	  // 初始化锁屏界面
+	  this.lockScreen = new LockScreen(this.app, this);
+	  
+	  // 初始化文件夹保护
+	  this.folderProtection = new FolderProtection(this.app, this);
+	  
+	  // 初始化锁定触发器
+	  this.lockTrigger = new LockTrigger(this.app, this);
+  
+	  // 添加设置选项卡
+	  this.addSettingTab(new PasswordLockSettingTab(this.app, this));
+  
+	  // 添加锁定命令
+	  this.addCommand({
+		id: 'lock-vault',
+		name: 'Lock Vault',
+		callback: () => {
+		  this.lockVault();
+		}
+	  });
+  
+	  // 检查是否是首次启动，如果是且没有设置密码，则显示设置界面
+	  if (!this.settings.passwordHash) {
+		this.activateSettingsTab();
+	  } else {
+		// 否则，如果设置了自动锁定，立即锁定
+		if (this.settings.lockOnStartup) {
+		  this.lockVault();
+		}
+	  }
+	}
+  
+	async loadSettings() {
+	  this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+  
+	async saveSettings() {
+	  await this.saveData(this.settings);
+	}
+  
+	lockVault() {
+	  // 锁定界面
+	  this.lockScreen.showLockScreen();
+	  
+	  // 锁定文件夹 (如果启用)
+	  if (this.settings.protectFolder) {
+		this.folderProtection.lockFolder();
+	  }
+	}
+  
+	unlockVault(password: string): boolean {
+	  // 验证密码
+	  if (this.lockScreen.verifyPassword(password)) {
+		// 解锁界面
+		this.lockScreen.hideLockScreen();
+		
+		// 解锁文件夹 (如果已锁定)
+		if (this.settings.protectFolder) {
+		  this.folderProtection.unlockFolder(password);
+		}
+		
+		return true;
+	  }
+	  return false;
+	}
+  
+	activateSettingsTab() {
+	  // 打开设置页面
+	  this.app.setting.open();
+	  this.app.setting.openTabById('obsidian-password-lock');
+	}
+  }
+  
+  // 设置选项卡
+  class PasswordLockSettingTab extends PluginSettingTab {
+	plugin: PasswordLockPlugin;
+  
+	constructor(app: App, plugin: PasswordLockPlugin) {
+	  super(app, plugin);
+	  this.plugin = plugin;
+	}
+  
+	display(): void {
+	  const {containerEl} = this;
+	  containerEl.empty();
+  
+	  containerEl.createEl('h2', {text: 'Password Lock Settings'});
+  
+	  // 密码设置
+	  new Setting(containerEl)
+		.setName('Set Password')
+		.setDesc('Set a 4-6 digit password to lock your vault.')
+		.addButton(btn => btn
+		  .setButtonText(this.plugin.settings.passwordHash ? 'Change Password' : 'Set Password')
+		  .onClick(() => {
+			// 打开密码设置对话框
+			this.plugin.lockScreen.showPasswordSetupModal();
+		  }));
+  
+	  // 自动锁定设置
+	  new Setting(containerEl)
+		.setName('Lock on startup')
+		.setDesc('Automatically lock the vault when Obsidian starts.')
+		.addToggle(toggle => toggle
+		  .setValue(this.plugin.settings.lockOnStartup)
+		  .onChange(async (value) => {
+			this.plugin.settings.lockOnStartup = value;
+			await this.plugin.saveSettings();
+		  }));
+  
+	  // 锁定超时设置
+	  new Setting(containerEl)
+		.setName('Lock on inactivity')
+		.setDesc('Automatically lock the vault after a period of inactivity.')
+		.addToggle(toggle => toggle
+		  .setValue(this.plugin.settings.lockOnInactivity)
+		  .onChange(async (value) => {
+			this.plugin.settings.lockOnInactivity = value;
+			await this.plugin.saveSettings();
+		  }));
+  
+	  // 超时时间设置
+	  if (this.plugin.settings.lockOnInactivity) {
+		new Setting(containerEl)
+		  .setName('Inactivity timeout (minutes)')
+		  .setDesc('Minutes of inactivity before locking the vault.')
+		  .addSlider(slider => slider
+			.setLimits(1, 60, 1)
+			.setValue(this.plugin.settings.inactivityTimeout)
+			.setDynamicTooltip()
+			.onChange(async (value) => {
+			  this.plugin.settings.inactivityTimeout = value;
+			  await this.plugin.saveSettings();
+			}));
+	  }
+  
+	  // 文件夹保护设置
+	  new Setting(containerEl)
+		.setName('Protect vault folder')
+		.setDesc('Also protect the vault folder in the file system. Requires admin privileges.')
+		.addToggle(toggle => toggle
+		  .setValue(this.plugin.settings.protectFolder)
+		  .onChange(async (value) => {
+			this.plugin.settings.protectFolder = value;
+			await this.plugin.saveSettings();
+		  }));
+	}
+  }

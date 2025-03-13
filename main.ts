@@ -1,134 +1,242 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+// src/main.ts
+import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { LockScreen } from './src/lock-screen';
+import { LockTrigger } from './src/lock-trigger';
+import { PasswordUtils } from './src/password-utils';
+import { DEFAULT_SETTINGS, PasswordSettings } from './src/settings';
+import { EN, ZH_CN } from './src/i18n';
 
-// Remember to rename these classes and interfaces!
+export default class PasswordLockPlugin extends Plugin {
+  settings: PasswordSettings;
+  lockScreen: LockScreen;
+  lockTrigger: LockTrigger;
+  i18n: any;
 
-interface MyPluginSettings {
-	mySetting: string;
+  async onload() {
+    // 加载设置
+    await this.loadSettings();
+    
+    // 加载语言
+    this.loadLanguage();
+    
+    // 初始化锁屏
+    this.lockScreen = new LockScreen(this.app, this);
+    
+    // 初始化自动锁定触发器
+    this.lockTrigger = new LockTrigger(this.app, this);
+    
+    // 添加设置面板
+    this.addSettingTab(new PasswordLockSettingTab(this.app, this));
+    
+    // 添加命令：锁定保管库
+    this.addCommand({
+      id: 'lock-vault',
+      name: this.i18n.lockVault,
+      callback: () => {
+        this.lockVault();
+      }
+    });
+    
+    // 如果已经设置了密码，根据设置决定是否自动锁定
+    if (this.settings.passwordHash) {
+      if (this.settings.lockOnStartup) {
+        this.lockVault();
+      }
+    } else {
+      // 如果没有设置密码，显示密码设置界面
+      setTimeout(() => {
+        this.lockScreen.showPasswordSetupFlow();
+      }, 500);
+    }
+    
+    // 更新锁定触发器设置
+    this.lockTrigger.updateSettings();
+  }
+
+  onunload() {
+    // 清除所有事件监听器
+    this.lockTrigger.clearEventListeners();
+  }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+    this.loadLanguage();
+  }
+
+  loadLanguage() {
+    if (this.settings.language === 'zh-cn') {
+      this.i18n = ZH_CN;
+    } else {
+      this.i18n = EN;
+    }
+  }
+
+  // 获取翻译文本
+  t(key: string): string {
+    return this.i18n[key];
+  }
+
+  // 锁定保管库
+  lockVault() {
+    this.lockScreen.showLockScreen();
+  }
+
+  // 解锁保管库
+  async unlockVault(password: string): Promise<boolean> {
+    if (await this.lockScreen.verifyPassword(password)) {
+      this.lockScreen.hideLockScreen();
+      return true;
+    }
+    return false;
+  }
+
+  // 验证主密码
+  async verifyMainPassword(password: string): Promise<boolean> {
+    return await PasswordUtils.verifyPassword(
+      password,
+      this.settings.passwordHash,
+      this.settings.salt
+    );
+  }
+
+  // 保存主密码
+  async saveMainPassword(password: string): Promise<void> {
+    const salt = PasswordUtils.generateSalt();
+    const hash = await PasswordUtils.hashPassword(password, salt);
+    
+    this.settings.passwordHash = hash;
+    this.settings.salt = salt;
+    
+    await this.saveSettings();
+  }
+
+  // 重置密码
+  async resetPassword(): Promise<void> {
+    this.settings.passwordHash = '';
+    this.settings.salt = '';
+    
+    await this.saveSettings();
+    
+    if (this.lockScreen) {
+      this.lockScreen.hideLockScreen();
+    }
+    
+    setTimeout(() => {
+      this.lockScreen.showPasswordSetupFlow();
+    }, 300);
+  }
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+// 设置面板
+class PasswordLockSettingTab extends PluginSettingTab {
+  plugin: PasswordLockPlugin;
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+  constructor(app: App, plugin: PasswordLockPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
 
-	async onload() {
-		await this.loadSettings();
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+    containerEl.createEl('h2', { text: this.plugin.t('lockVault') });
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+    // 语言选项
+    new Setting(containerEl)
+      .setName('Language / 语言')
+      .setDesc('Select the language for the plugin interface. / 选择插件界面语言。')
+      .addDropdown(dropdown => dropdown
+        .addOption('en', 'English')
+        .addOption('zh-cn', '简体中文')
+        .setValue(this.plugin.settings.language)
+        .onChange(async (value) => {
+          this.plugin.settings.language = value;
+          await this.plugin.saveSettings();
+          this.display(); // 重新加载设置界面以应用新语言
+        }));
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+    // 设置/更改密码
+    new Setting(containerEl)
+      .setName(this.plugin.t('setPassword'))
+      .setDesc(this.plugin.t('setPasswordDesc'))
+      .addButton(button => button
+        .setButtonText(this.plugin.settings.passwordHash 
+          ? this.plugin.t('changePassword') 
+          : this.plugin.t('setPassword'))
+        .onClick(() => {
+          this.plugin.lockScreen.showPasswordSetupFlow();
+        }));
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
+    // 启动时锁定选项
+    new Setting(containerEl)
+      .setName(this.plugin.t('lockOnStartup'))
+      .setDesc(this.plugin.t('lockOnStartupDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.lockOnStartup)
+        .onChange(async (value) => {
+          this.plugin.settings.lockOnStartup = value;
+          await this.plugin.saveSettings();
+        }));
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+    // 不活动时锁定选项
+    new Setting(containerEl)
+      .setName(this.plugin.t('lockOnInactivity'))
+      .setDesc(this.plugin.t('lockOnInactivityDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.lockOnInactivity)
+        .onChange(async (value) => {
+          this.plugin.settings.lockOnInactivity = value;
+          await this.plugin.saveSettings();
+          this.plugin.lockTrigger.updateSettings();
+          this.display(); // 更新显示以显示/隐藏超时选项
+        }));
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+    // 不活动超时选项（仅当不活动锁定启用时显示）
+    if (this.plugin.settings.lockOnInactivity) {
+      new Setting(containerEl)
+        .setName(this.plugin.t('inactivityTimeout'))
+        .setDesc(this.plugin.t('inactivityTimeoutDesc'))
+        .addDropdown(dropdown => dropdown
+          .addOption('1', '1 minute')
+          .addOption('3', '3 minutes')
+          .addOption('5', '5 minutes')
+          .addOption('10', '10 minutes')
+          .addOption('15', '15 minutes')
+          .addOption('30', '30 minutes')
+          .addOption('60', '1 hour')
+          .setValue(this.plugin.settings.inactivityTimeout.toString())
+          .onChange(async (value) => {
+            this.plugin.settings.inactivityTimeout = parseInt(value);
+            await this.plugin.saveSettings();
+            this.plugin.lockTrigger.updateSettings();
+          }));
+    }
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
+    // 窗口失焦时锁定选项
+    new Setting(containerEl)
+      .setName(this.plugin.t('lockOnWindowBlur'))
+      .setDesc(this.plugin.t('lockOnWindowBlurDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.lockOnWindowBlur)
+        .onChange(async (value) => {
+          this.plugin.settings.lockOnWindowBlur = value;
+          await this.plugin.saveSettings();
+          this.plugin.lockTrigger.updateSettings();
+        }));
 
-	onunload() {
+    // 手动锁定说明
+    containerEl.createEl('h3', { text: this.plugin.t('manualLock') });
+    containerEl.createEl('p', { text: this.plugin.t('manualLockDesc') });
 
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
+    // 版本信息
+    containerEl.createEl('div', { 
+      text: 'Vault Lock v' + this.plugin.manifest.version,
+      cls: 'vault-lock-version'
+    });
+  }
 }
