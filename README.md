@@ -18,7 +18,7 @@
 ## 安装方法
 
 1. **下载插件**：
-   - 从 [GitHub releases](https://github.com/artemislin/vaultlock/releases) 下载最新版本的 `vaultlock.zip`。
+   - 从 [GitHub releases](https://github.com/ArtemisLin/vault-lock/blob/master/assets/vault-lock-screenshot.png) 下载最新版本的 `vaultlock.zip`。
 2. **安装插件**：
    - 打开Obsidian，进入“设置” > “社区插件”。
    - 确保“社区插件”已启用。
