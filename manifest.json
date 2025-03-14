@@ -3,7 +3,7 @@
 	"name": "VaultLock",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
+	"description": "Use a 4-digit password to lock your obsidian interface.",
 	"author": "ArtemisLin",
 	"authorUrl": "https://github.com/ArtemisLin",
 
